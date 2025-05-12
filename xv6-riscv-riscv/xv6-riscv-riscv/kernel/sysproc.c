@@ -89,3 +89,17 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_sched_statistics(void)
+{
+  return sched_statistics();
+}
+
+uint64
+sys_sched_tickets(void)
+{
+  int n;
+  argint(0, &n);
+  return sched_tickets(n);
+}
