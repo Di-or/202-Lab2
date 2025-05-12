@@ -129,7 +129,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_sched_statistics]  sys_sched_statistics,
-[SYS_sched_tickets] sys_sched_tickets
+[SYS_sched_tickets] sys_sched_tickets,
 };
 
 void
