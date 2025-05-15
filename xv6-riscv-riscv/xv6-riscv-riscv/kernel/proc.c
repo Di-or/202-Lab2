@@ -125,7 +125,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->tickets = 10000;  
-  p->ticks = 0
+  p->ticks = 0;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
