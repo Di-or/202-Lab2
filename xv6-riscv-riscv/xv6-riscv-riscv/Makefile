@@ -134,6 +134,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_stats\
 	$U/_tickets\
+	$U/_lab2\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

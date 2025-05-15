@@ -2,6 +2,6 @@
 #include "user/user.h"
 
 int main() {
-    printf("Stats called.\n");
+    sched_statistics(); 
     exit(0);
 }

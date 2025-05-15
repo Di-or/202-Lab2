@@ -2,6 +2,6 @@
 #include "user/user.h"
 
 int main() {
-    printf("Tickets called.\n");
+    sched_tickets(10); 
     exit(0);
 }
