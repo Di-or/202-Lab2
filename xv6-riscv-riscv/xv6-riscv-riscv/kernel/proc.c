@@ -453,6 +453,13 @@ scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
+    #if defined(LOTTERY) 
+    //lottery scheduler 
+    #elif defined(STRIDE) 
+    //strider scheduler 
+    #else  
+    //original round-robin 
+
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
@@ -469,6 +476,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
+    #endif 
   }
 }
 
