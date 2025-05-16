@@ -6,6 +6,10 @@
 #include "proc.h"
 #include "defs.h"
 
+#define BIG_NUM 100000
+#define NULL ((void*)0)
+
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -126,6 +130,8 @@ found:
   p->state = USED;
   p->tickets = 10000;  
   p->ticks = 0;
+  p->pass = 0; 
+  p->stride = BIG_NUM / p->tickets;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -456,7 +462,52 @@ scheduler(void)
     #if defined(LOTTERY) 
     //lottery scheduler 
     #elif defined(STRIDE) 
-    //strider scheduler 
+
+    struct proc *lowest_pass_p = 0;
+    for(p=proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if (p->state == RUNNABLE) {
+      //printf("sched check: pid %d, pass %d, stride %d, tickets %d\n", p->pid, p->pass, p->stride, p->tickets);
+      if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
+        if (lowest_pass_p)
+          release(&lowest_pass_p->lock);
+        lowest_pass_p = p;
+        continue; 
+      } else {
+        release(&p->lock);
+      }
+    } else {
+        release(&p->lock);
+    }
+  }
+
+    if(lowest_pass_p == 0) {
+      // No runnable process, avoid busy loop
+      continue;
+    }
+    //printf("chosen pid %d with pass %d\n", lowest_pass_p ? lowest_pass_p->pid : -1, lowest_pass_p ? lowest_pass_p->pass : -1);
+
+
+    if(lowest_pass_p){
+      if(lowest_pass_p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        lowest_pass_p->state = RUNNING;
+        c->proc = lowest_pass_p;
+        lowest_pass_p->pass += lowest_pass_p->stride;
+        swtch(&c->context, &lowest_pass_p->context);
+        
+
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+      }
+      release(&lowest_pass_p->lock);
+    }
+    
+    
     #else  
     //original round-robin 
 
@@ -711,5 +762,7 @@ sched_tickets(int n)
   if(n > 10000)
     n = 10000;
   p->tickets = n;
+  p->stride = BIG_NUM / p->tickets;
+  printf("sched_tickets: pid %d set tickets = %d, stride = %d\n", p->pid, p->tickets, p->stride);
   return 0;
 }
