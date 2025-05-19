@@ -92,7 +92,7 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
   int tickets;         
-  int ticks; 
+  int nticks; 
   int stride;
   int pass;
 

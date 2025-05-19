@@ -72,7 +72,7 @@ CFLAGS += -fno-pie -nopie
 endif
 
 
-AB2 = RR 
+LAB2 = RR 
 CFLAGS += -D$(LAB2)
 
 LDFLAGS = -z max-page-size=4096

@@ -30,6 +30,15 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+unsigned short lfsr = 0xACE1u;
+unsigned short bit;
+
+unsigned short rand()
+{
+  bit = ((lfsr >> 0) ^ (lfsr >> 2) ^ (lfsr >> 3) ^ (lfsr >> 5)) & 1;
+  return lfsr = (lfsr >> 1) | (bit << 15);
+}
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -129,7 +138,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->tickets = 10000;  
-  p->ticks = 0;
+  p->nticks = 0;
   p->pass = 0; 
   p->stride = BIG_NUM / p->tickets;
   // Allocate a trapframe page.
@@ -319,6 +328,9 @@ fork(void)
 
   pid = np->pid;
 
+  //np->tickets = p->tickets;  
+  //np->nticks = 0;  
+
   release(&np->lock);
 
   acquire(&wait_lock);
@@ -460,73 +472,122 @@ scheduler(void)
     intr_on();
 
     #if defined(LOTTERY) 
-    //lottery scheduler 
+      int total_tickets = 0;
+      
+
+
+      for(p = proc; p < &proc[NPROC]; p++) {
+        //acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if(p->tickets <= 0) {
+            p->tickets = 10000;
+          }
+          total_tickets += p->tickets;
+        }
+        //release(&p->lock);
+      }
+      
+      // If no runnable processes, just yield the CPU
+      //if(total_tickets == 0) {
+        //continue;
+      //}
+      
+      unsigned short winner = rand() % total_tickets;
+      //printf("Lottery: total_tickets=%d, winner=%d\n", total_tickets, winner);
+      unsigned int counter = 0;
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          int start_ticket = counter;
+          int end_ticket = counter + p->tickets - 1;
+          if(winner >= start_ticket && winner <= end_ticket) {
+
+            if (p->pid != 3){
+              
+              //printf("Process %d (PID %d) won with %d tickets (range %d-%d)\n", 
+              //p - proc, p->pid, p->tickets, counter, counter + p->tickets - 1);
+            }
+            
+            p->state = RUNNING;
+            p->nticks++;
+            c->proc = p;
+            swtch(&c->context, &p->context);
+            c->proc = 0;
+            release(&p->lock);
+            break;  // Found our process, break out of the inner loop
+          } 
+          counter += p->tickets;
+        }
+        release(&p->lock);
+      }
+
+
     #elif defined(STRIDE) 
 
-    struct proc *lowest_pass_p = 0;
-    for(p=proc; p < &proc[NPROC]; p++){
-      acquire(&p->lock);
-      if (p->state == RUNNABLE) {
-      //printf("sched check: pid %d, pass %d, stride %d, tickets %d\n", p->pid, p->pass, p->stride, p->tickets);
-      if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
-        if (lowest_pass_p)
-          release(&lowest_pass_p->lock);
-        lowest_pass_p = p;
-        continue; 
-      } else {
-        release(&p->lock);
+      struct proc *lowest_pass_p = 0;
+      for(p=proc; p < &proc[NPROC]; p++){
+        acquire(&p->lock);
+        if (p->state == RUNNABLE) {
+        //printf("sched check: pid %d, pass %d, stride %d, tickets %d\n", p->pid, p->pass, p->stride, p->tickets);
+        if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
+          if (lowest_pass_p)
+            release(&lowest_pass_p->lock);
+          lowest_pass_p = p;
+          continue; 
+        } else {
+          release(&p->lock);
+          }
+        } else {
+          release(&p->lock);
+        }
       }
-    } else {
-        release(&p->lock);
-    }
-  }
 
-    if(lowest_pass_p == 0) {
-      // No runnable process, avoid busy loop
-      continue;
-    }
-    //printf("chosen pid %d with pass %d\n", lowest_pass_p ? lowest_pass_p->pid : -1, lowest_pass_p ? lowest_pass_p->pass : -1);
-
-
-    if(lowest_pass_p){
-      if(lowest_pass_p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        lowest_pass_p->state = RUNNING;
-        c->proc = lowest_pass_p;
-        lowest_pass_p->pass += lowest_pass_p->stride;
-        swtch(&c->context, &lowest_pass_p->context);
-        
-
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+      if(lowest_pass_p == 0) {
+        // No runnable process, avoid busy loop
+        continue;
       }
-      release(&lowest_pass_p->lock);
-    }
+      //printf("chosen pid %d with pass %d\n", lowest_pass_p ? lowest_pass_p->pid : -1, lowest_pass_p ? lowest_pass_p->pass : -1);
+
+
+      if(lowest_pass_p){
+        if(lowest_pass_p->state == RUNNABLE) {
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          lowest_pass_p->state = RUNNING;
+          c->proc = lowest_pass_p;
+          lowest_pass_p->pass += lowest_pass_p->stride;
+          swtch(&c->context, &lowest_pass_p->context);
+          
+
+
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+        release(&lowest_pass_p->lock);
+      }
     
     
     #else  
     //original round-robin 
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+        release(&p->lock);
       }
-      release(&p->lock);
-    }
     #endif 
   }
 }
@@ -749,7 +810,7 @@ sched_statistics(void)
   //printf("\n");
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state != UNUSED){
-      printf("%d(%s): tickets: %d, ticks: %d\n", p->pid, p->name, p->tickets, p->ticks);
+      printf("%d(%s): tickets: %d, ticks: %d\n", p->pid, p->name, p->tickets, p->nticks);
     }
   }
   return 0;
@@ -763,6 +824,6 @@ sched_tickets(int n)
     n = 10000;
   p->tickets = n;
   p->stride = BIG_NUM / p->tickets;
-  printf("sched_tickets: pid %d set tickets = %d, stride = %d\n", p->pid, p->tickets, p->stride);
+  //printf("sched_tickets: pid %d set tickets = %d, stride = %d\n", p->pid, p->tickets, p->stride);
   return 0;
 }
