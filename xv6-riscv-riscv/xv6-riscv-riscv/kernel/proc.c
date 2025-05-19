@@ -463,16 +463,22 @@ scheduler(void)
     //lottery scheduler 
     #elif defined(STRIDE) 
 
+
+
+
+
     struct proc *lowest_pass_p = 0;
     for(p=proc; p < &proc[NPROC]; p++){
       acquire(&p->lock);
+      
+      
       if (p->state == RUNNABLE) {
+        //printf("(%d)%d ", p->pid, p->pass);
       //printf("sched check: pid %d, pass %d, stride %d, tickets %d\n", p->pid, p->pass, p->stride, p->tickets);
         if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
-          if (lowest_pass_p)
+          if(lowest_pass_p) //release the old lowest_pass_p
             release(&lowest_pass_p->lock);
           lowest_pass_p = p;
-          continue; 
         } else {
           release(&p->lock);
         }
@@ -480,25 +486,28 @@ scheduler(void)
           release(&p->lock);
       }
     }
+    
 
     if(lowest_pass_p == 0) {
       // No runnable process, avoid busy loop
       continue;
     }
     //printf("chosen pid %d with pass %d\n", lowest_pass_p ? lowest_pass_p->pid : -1, lowest_pass_p ? lowest_pass_p->pass : -1);
-
+    
 
     if(lowest_pass_p){
       if(lowest_pass_p->state == RUNNABLE) {
+        //printf(" lowest pass: %d\n", lowest_pass_p->pass);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         lowest_pass_p->state = RUNNING;
         c->proc = lowest_pass_p;
+        //printf("stride adding: %d + %d = %d\n", lowest_pass_p->pass, lowest_pass_p->stride, lowest_pass_p->pass + lowest_pass_p->stride);
         lowest_pass_p->pass += lowest_pass_p->stride;
         lowest_pass_p->ticks++;
-        if (lowest_pass_p->pid > 3)
-          printf("Updated stride: pid %d, ticks %d, pass %d, stride %d, tickets %d\n", lowest_pass_p->pid, lowest_pass_p->ticks, lowest_pass_p->pass, lowest_pass_p->stride, lowest_pass_p->tickets);
+        //if (lowest_pass_p->pid > 3)
+          //printf("Updated stride: pid %d, ticks %d, pass %d, stride %d, tickets %d\n", lowest_pass_p->pid, lowest_pass_p->ticks, lowest_pass_p->pass, lowest_pass_p->stride, lowest_pass_p->tickets);
         swtch(&c->context, &lowest_pass_p->context);
         
 
@@ -508,6 +517,7 @@ scheduler(void)
         c->proc = 0;
       }
       release(&lowest_pass_p->lock);
+      
     }
     
     
@@ -613,6 +623,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  //printf("%d sleeping.\n", p->pid);
 
   sched();
 
@@ -636,6 +647,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        //printf("%d wake up.\n", p->pid);
       }
       release(&p->lock);
     }
