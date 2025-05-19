@@ -131,7 +131,7 @@ found:
   p->tickets = 10000;  
   p->ticks = 0;
   p->pass = 0; 
-  p->stride = BIG_NUM / p->tickets;
+  p->stride = 0;
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -468,18 +468,18 @@ scheduler(void)
       acquire(&p->lock);
       if (p->state == RUNNABLE) {
       //printf("sched check: pid %d, pass %d, stride %d, tickets %d\n", p->pid, p->pass, p->stride, p->tickets);
-      if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
-        if (lowest_pass_p)
-          release(&lowest_pass_p->lock);
-        lowest_pass_p = p;
-        continue; 
+        if (lowest_pass_p == 0 || lowest_pass_p->pass > p->pass) {
+          if (lowest_pass_p)
+            release(&lowest_pass_p->lock);
+          lowest_pass_p = p;
+          continue; 
+        } else {
+          release(&p->lock);
+        }
       } else {
-        release(&p->lock);
+          release(&p->lock);
       }
-    } else {
-        release(&p->lock);
     }
-  }
 
     if(lowest_pass_p == 0) {
       // No runnable process, avoid busy loop
@@ -496,6 +496,9 @@ scheduler(void)
         lowest_pass_p->state = RUNNING;
         c->proc = lowest_pass_p;
         lowest_pass_p->pass += lowest_pass_p->stride;
+        lowest_pass_p->ticks++;
+        if (lowest_pass_p->pid > 3)
+          printf("Updated stride: pid %d, ticks %d, pass %d, stride %d, tickets %d\n", lowest_pass_p->pid, lowest_pass_p->ticks, lowest_pass_p->pass, lowest_pass_p->stride, lowest_pass_p->tickets);
         swtch(&c->context, &lowest_pass_p->context);
         
 
@@ -763,6 +766,6 @@ sched_tickets(int n)
     n = 10000;
   p->tickets = n;
   p->stride = BIG_NUM / p->tickets;
-  printf("sched_tickets: pid %d set tickets = %d, stride = %d\n", p->pid, p->tickets, p->stride);
+  //printf("sched_tickets: pid %d set tickets = %d, stride = %d\n", p->pid, p->tickets, p->stride);
   return 0;
 }
