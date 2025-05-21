@@ -30,6 +30,15 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+// pseudo random generator (https://stackoverflow.com/a/7603688)
+unsigned short lfsr = 0xACE1u;
+unsigned short bit;
+unsigned short rand()
+{
+bit = ((lfsr >> 0) ^ (lfsr >> 2) ^ (lfsr >> 3) ^ (lfsr >> 5)) & 1;
+return lfsr = (lfsr >> 1) | (bit << 15);
+}
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -460,7 +469,30 @@ scheduler(void)
     intr_on();
 
     #if defined(LOTTERY) 
-    //lottery scheduler 
+    int total_tickets = 0;
+      for(p = proc; p < &proc[NPROC]; p++) {
+        if(p->state == RUNNABLE) {
+          total_tickets += p->tickets;
+        }
+      }
+      unsigned short winner = rand() % total_tickets;
+      unsigned int counter = 0;
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          if(winner >= counter && winner <= (counter + p->tickets - 1)) {
+            p->state = RUNNING;
+            p->ticks++;
+            c->proc = p;
+            swtch(&c->context, &p->context);
+            c->proc = 0;
+            release(&p->lock);
+            break;  
+          } 
+          counter += p->tickets;
+        }
+        release(&p->lock);
+      }
     #elif defined(STRIDE) 
 
 
