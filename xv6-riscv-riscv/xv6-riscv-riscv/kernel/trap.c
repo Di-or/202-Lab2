@@ -166,10 +166,10 @@ clockintr()
   acquire(&tickslock);
   ticks++;
 
-  struct proc *p = myproc();
-  if(p && p->state == RUNNING){
-    p->ticks++;
-  }
+  // struct proc *p = myproc();
+  // if(p && p->state == RUNNING){
+  //   p->ticks++;
+  // }
 
 
   wakeup(&ticks);
